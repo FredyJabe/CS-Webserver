@@ -1,2 +1,6 @@
 port: 8080
 contentPath: ./content
+httpsEnabled: true
+httpsPort: 8081
+httpsCertificatePath: ./certs/server.pfx
+httpsCertificatePassword: change-me
