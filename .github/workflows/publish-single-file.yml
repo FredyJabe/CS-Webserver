@@ -3,7 +3,7 @@ name: Publish Single-File Executables
 on:
   push:
     branches:
-      - '**'
+      - main
   workflow_dispatch:
 
 jobs:
@@ -51,3 +51,31 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: ./artifacts/${{ matrix.rid }}/${{ matrix.output_name }}
           if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: publish
+    permissions:
+      contents: write
+    steps:
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CWebserver-linux-x64
+          path: ./release
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: CWebserver-win-x64
+          path: ./release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: auto-main-${{ github.run_number }}
+          name: Automated Main Build ${{ github.run_number }}
+          generate_release_notes: true
+          files: |
+            ./release/CWebserver
+            ./release/CWebserver.exe
