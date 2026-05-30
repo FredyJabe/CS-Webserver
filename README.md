@@ -1,5 +1,9 @@
 # C-Webserver
 
+[![Last Build](https://img.shields.io/github/actions/workflow/status/FredyJabe/C-Webserver/publish-single-file.yml?label=Last%20Build)](https://github.com/FredyJabe/C-Webserver/actions/workflows/publish-single-file.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/FredyJabe/C-Webserver?style=flat)](https://github.com/FredyJabe/C-Webserver/stargazers)
+[![Downloads](https://img.shields.io/github/downloads/FredyJabe/C-Webserver/total?style=flat)](https://github.com/FredyJabe/C-Webserver/releases)
+
 A lightweight C# web server that serves static files, markdown pages, and server-rendered `<cs>...</cs>` blocks.
 
 ## What It Can Do
