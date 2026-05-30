@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
 using System.Text;
+using HtmlAgilityPack;
+using Microsoft.CodeAnalysis.CSharp.Scripting;
+using Microsoft.CodeAnalysis.Scripting;
 
 var config = LoadConfig("config.yaml");
 var listener = new TcpListener(IPAddress.Any, config.Port);
@@ -45,7 +48,7 @@ static async Task HandleClientAsync(TcpClient client, string contentPath)
                 Encoding.UTF8.GetBytes("healthy"),
                 "text/plain"
             ),
-            _ => ServeFile(pathWithoutQuery, contentPath)
+            _ => await ServeFileAsync(pathWithoutQuery, contentPath)
         };
 
         var responseHeaders =
@@ -71,7 +74,7 @@ static async Task HandleClientAsync(TcpClient client, string contentPath)
     }
 }
 
-static (string StatusLine, byte[] BodyBytes, string ContentType) ServeFile(string requestPath, string contentPath)
+static async Task<(string StatusLine, byte[] BodyBytes, string ContentType)> ServeFileAsync(string requestPath, string contentPath)
 {
     var relativePath = requestPath == "/" ? "index.html" : requestPath.TrimStart('/');
     relativePath = relativePath.Replace('/', Path.DirectorySeparatorChar);
@@ -89,14 +92,113 @@ static (string StatusLine, byte[] BodyBytes, string ContentType) ServeFile(strin
         return ("HTTP/1.1 404 Not Found", Encoding.UTF8.GetBytes("Not Found"), "text/plain");
     }
 
-    if (Path.GetExtension(fullPath).Equals(".md", StringComparison.OrdinalIgnoreCase))
+    var extension = Path.GetExtension(fullPath);
+    if (extension.Equals(".md", StringComparison.OrdinalIgnoreCase))
     {
         var markdown = File.ReadAllText(fullPath);
+        markdown = await RenderServerSideCsInTextAsync(markdown, fullPath, requestPath);
         var html = BuildMarkdownHtml(markdown, Path.GetFileName(fullPath));
         return ("HTTP/1.1 200 OK", Encoding.UTF8.GetBytes(html), "text/html");
     }
 
+    if (extension.Equals(".html", StringComparison.OrdinalIgnoreCase) || extension.Equals(".htm", StringComparison.OrdinalIgnoreCase))
+    {
+        var html = File.ReadAllText(fullPath);
+        html = await RenderServerSideCsInHtmlAsync(html, fullPath, requestPath);
+        return ("HTTP/1.1 200 OK", Encoding.UTF8.GetBytes(html), GetContentType(fullPath));
+    }
+
     return ("HTTP/1.1 200 OK", File.ReadAllBytes(fullPath), GetContentType(fullPath));
+}
+
+static ScriptOptions BuildScriptOptions()
+{
+    return ScriptOptions.Default
+        .AddReferences(
+            typeof(object).Assembly,
+            typeof(Enumerable).Assembly,
+            typeof(HtmlDocument).Assembly
+        )
+        .AddImports("System", "System.Linq", "System.Collections.Generic", "HtmlAgilityPack");
+}
+
+static async Task<string> RenderServerSideCsInTextAsync(string content, string filePath, string requestPath)
+{
+    var matches = Regex.Matches(content, "<cs>([\\s\\S]*?)</cs>", RegexOptions.IgnoreCase);
+    if (matches.Count == 0)
+    {
+        return content;
+    }
+
+    var rendered = new StringBuilder(content.Length);
+    var cursor = 0;
+    var scriptOptions = BuildScriptOptions();
+    var globals = new CsScriptGlobals(filePath, requestPath);
+
+    foreach (Match match in matches)
+    {
+        rendered.Append(content, cursor, match.Index - cursor);
+        try
+        {
+            var scriptBody = match.Groups[1].Value;
+            var result = await CSharpScript.EvaluateAsync<object?>(scriptBody, scriptOptions, globals);
+            rendered.Append(result?.ToString() ?? string.Empty);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"<cs> parser error in '{filePath}': {ex.Message}");
+            rendered.Append(string.Empty);
+        }
+
+        cursor = match.Index + match.Length;
+    }
+
+    rendered.Append(content, cursor, content.Length - cursor);
+    return rendered.ToString();
+}
+
+static async Task<string> RenderServerSideCsInHtmlAsync(string html, string filePath, string requestPath)
+{
+    var document = new HtmlDocument();
+    document.LoadHtml(html);
+    var csNodes = document.DocumentNode.Descendants("cs").ToList();
+    if (csNodes.Count == 0)
+    {
+        return html;
+    }
+
+    var scriptOptions = BuildScriptOptions();
+
+    foreach (var node in csNodes)
+    {
+        var globals = new CsScriptGlobals(filePath, requestPath, document);
+
+        try
+        {
+            var result = await CSharpScript.EvaluateAsync<object?>(node.InnerHtml, scriptOptions, globals);
+            var replacement = result?.ToString() ?? string.Empty;
+            if (replacement.Length == 0)
+            {
+                node.Remove();
+                continue;
+            }
+
+            var fragment = HtmlNode.CreateNode($"<span>{replacement}</span>");
+            var inserted = fragment.ChildNodes.ToList();
+            foreach (var child in inserted)
+            {
+                node.ParentNode.InsertBefore(child, node);
+            }
+            node.Remove();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"<cs> parser error in '{filePath}': {ex.Message}");
+            node.Remove();
+        }
+    }
+
+    return document.DocumentNode.OuterHtml;
 }
 
 static string GetContentType(string filePath)
@@ -436,3 +538,13 @@ static ServerConfig LoadConfig(string configPath)
 }
 
 record ServerConfig(int Port, string ContentPath);
+
+public sealed class CsScriptGlobals(string filePath, string requestPath, HtmlDocument? document = null)
+{
+    public string FilePath { get; } = filePath;
+    public string RequestPath { get; } = requestPath;
+    public DateTime UtcNow => DateTime.UtcNow;
+    public DateTime Now => DateTime.Now;
+    public HtmlDocument? Document { get; } = document;
+    public HtmlNode? GetById(string id) => Document?.GetElementbyId(id);
+}

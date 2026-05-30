@@ -7,5 +7,14 @@
 </head>
 <body>
   <h1>C-Webserver is running</h1>
+  <div id="time">Server time: waiting...</div>
 </body>
 </html>
+
+<cs>
+var timeDiv = GetById("time");
+if (timeDiv is not null)
+{
+    timeDiv.InnerHtml = $"Server time: {Now:yyyy-MM-dd HH:mm:ss}";
+}
+</cs>
