@@ -60,3 +60,5 @@ nunit-*.xml
 certs
 appsettings.json
 appsettings.Development.json
+# Local runtime config
+config.yaml

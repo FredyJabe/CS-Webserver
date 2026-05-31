@@ -34,24 +34,35 @@ Configuration file: `config.yaml`
 ```yaml
 port: 8080
 contentPath: ./content
-httpsEnabled: false
-httpsPort: 8443
-httpsCertificatePath: ./certs/server.pfx
-httpsCertificatePassword: change-me
+https:
+  enabled: false
+  port: 8443
+  certificate:
+    path: ./certs/server.pfx
+    pass: change-me
+    pem:
+      usePem: false
+      certPath: ./certs/server.crt
+      keyPath: ./certs/server.key
+      keyPass: ""
 ```
 
 ### Config fields
 
 - `port`: HTTP port
 - `contentPath`: directory to serve files from
-- `httpsEnabled`: enables HTTPS listener + HTTP→HTTPS redirects
-- `httpsPort`: HTTPS port
-- `httpsCertificatePath`: path to `.pfx` certificate file
-- `httpsCertificatePassword`: certificate password
+- `https.enabled`: enables HTTPS listener + HTTP→HTTPS redirects
+- `https.port`: HTTPS port
+- `https.certificate.path`: path to `.pfx` certificate file
+- `https.certificate.pass`: `.pfx` certificate password
+- `https.certificate.pem.usePem`: when `true`, load certificate from PEM files instead of `.pfx`
+- `https.certificate.pem.certPath`: PEM certificate path
+- `https.certificate.pem.keyPath`: PEM private key path
+- `https.certificate.pem.keyPass`: encrypted PEM key password (empty if key is unencrypted)
 
 ### Missing/invalid HTTPS cert behavior
 
-If `httpsEnabled: true` but certificate config is invalid:
+If `https.enabled: true` but certificate config is invalid:
 
 - Server logs a warning
 - HTTPS is disabled automatically
@@ -75,10 +86,17 @@ dotnet dev-certs https --trust
 Use matching config values:
 
 ```yaml
-httpsEnabled: true
-httpsPort: 8443
-httpsCertificatePath: ./certs/server.pfx
-httpsCertificatePassword: change-me
+https:
+  enabled: true
+  port: 8443
+  certificate:
+    path: ./certs/server.pfx
+    pass: change-me
+    pem:
+      usePem: false
+      certPath: ./certs/server.crt
+      keyPath: ./certs/server.key
+      keyPass: ""
 ```
 
 ## Running
