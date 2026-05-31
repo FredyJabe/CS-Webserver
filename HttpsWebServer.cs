@@ -14,7 +14,14 @@ public sealed class HttpsWebServer(int port, string contentPath, X509Certificate
     public async Task RunAsync()
     {
         var listener = new TcpListener(IPAddress.Any, _port);
-        listener.Start();
+        try
+        {
+            listener.Start();
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AccessDenied)
+        {
+            throw new InvalidOperationException(BuildLowPortPermissionMessage("HTTPS", _port), ex);
+        }
 
         Console.WriteLine($"C# webserver listening on https://localhost:{_port}");
         Console.WriteLine($"Serving content from: {_contentPath}");
@@ -24,6 +31,17 @@ public sealed class HttpsWebServer(int port, string contentPath, X509Certificate
             var client = await listener.AcceptTcpClientAsync();
             _ = Task.Run(() => HandleClientAsync(client));
         }
+    }
+
+    private static string BuildLowPortPermissionMessage(string protocol, int port)
+    {
+        return
+            $"{protocol} bind failed on port {port}. Linux blocks ports below 1024 for non-root users.\n" +
+            "Options:\n" +
+            "1) Use non-privileged ports (for example 8080/8443), or\n" +
+            "2) Grant bind capability to the app binary:\n" +
+            "   sudo setcap 'cap_net_bind_service=+ep' /path/to/your/published/binary\n" +
+            "3) Or run behind a reverse proxy (nginx/caddy) on 80/443.";
     }
 
     private async Task HandleClientAsync(TcpClient client)

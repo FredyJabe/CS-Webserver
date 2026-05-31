@@ -1,6 +1,13 @@
-port: 8080
+port: 80
 contentPath: ./content
-httpsEnabled: true
-httpsPort: 8081
-httpsCertificatePath: ./certs/server.pfx
-httpsCertificatePassword: change-me
+https:
+  enabled: true
+  port: 443
+  certificate:
+    path: ./certs/server.pfx
+    pass: thisisastrongpasswordyo
+    pem:
+      usePem: true
+      certPath: ./certs/domain.cert.pem
+      keyPath: ./certs/private.key.pem
+      keyPass: ""
