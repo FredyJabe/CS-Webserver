@@ -58,7 +58,7 @@ public sealed class HttpsWebServer(int port, string contentPath, X509Certificate
                 ClientCertificateRequired = false
             });
 
-            using var reader = new StreamReader(sslStream, Encoding.ASCII, leaveOpen: true);
+            using var reader = new StreamReader(sslStream, Encoding.UTF8, leaveOpen: true);
 
             var requestLine = await reader.ReadLineAsync();
             if (string.IsNullOrWhiteSpace(requestLine))
@@ -66,30 +66,64 @@ public sealed class HttpsWebServer(int port, string contentPath, X509Certificate
                 return;
             }
 
+            var requestParts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var method = requestParts.ElementAtOrDefault(0) ?? "GET";
+            var path = requestParts.ElementAtOrDefault(1) ?? "/";
+
+            var headerLines = new List<string>();
             string? headerLine;
             do
             {
                 headerLine = await reader.ReadLineAsync();
+                if (!string.IsNullOrEmpty(headerLine))
+                {
+                    headerLines.Add(headerLine);
+                }
             } while (!string.IsNullOrEmpty(headerLine));
 
-            var path = requestLine.Split(' ').ElementAtOrDefault(1) ?? "/";
-            var pathWithoutQuery = path.Split('?', 2)[0];
+            var headers = HttpParsing.ParseHeaders(headerLines);
+            var body = string.Empty;
+            if (headers.TryGetValue("Content-Length", out var contentLengthHeader)
+                && int.TryParse(contentLengthHeader, out var contentLength)
+                && contentLength > 0)
+            {
+                var buffer = new char[contentLength];
+                var totalRead = 0;
+                while (totalRead < contentLength)
+                {
+                    var read = await reader.ReadAsync(buffer, totalRead, contentLength - totalRead);
+                    if (read <= 0)
+                    {
+                        break;
+                    }
 
-            var (statusLine, bodyBytes, contentType) = pathWithoutQuery switch
+                    totalRead += read;
+                }
+
+                body = new string(buffer, 0, totalRead);
+            }
+
+            var request = HttpParsing.BuildRequest(method, path, body, headers);
+
+            var (statusLine, bodyBytes, contentType, setCookieHeaders) = request.Path switch
             {
                 "/health" => (
                     "HTTP/1.1 200 OK",
                     Encoding.UTF8.GetBytes("healthy"),
-                    "text/plain"
+                    "text/plain",
+                    Array.Empty<string>()
                 ),
-                _ => await ContentService.ServePathAsync(pathWithoutQuery, _contentPath)
+                _ => await ContentService.ServePathAsync(request, _contentPath)
             };
+
+            var cookiesHeaderText = string.Join("", setCookieHeaders.Select(x => $"Set-Cookie: {x}\r\n"));
 
             var responseHeaders =
                 $"{statusLine}\r\n" +
                 $"Date: {DateTime.UtcNow:R}\r\n" +
                 "Server: CSharpTcpServer\r\n" +
                 $"Content-Type: {contentType}; charset=utf-8\r\n" +
+                cookiesHeaderText +
                 $"Content-Length: {bodyBytes.Length}\r\n" +
                 "Connection: close\r\n\r\n";
 
@@ -97,6 +131,10 @@ public sealed class HttpsWebServer(int port, string contentPath, X509Certificate
             await sslStream.WriteAsync(headerBytes);
             await sslStream.WriteAsync(bodyBytes);
             await sslStream.FlushAsync();
+        }
+        catch (Exception ex) when (IsClientDisconnect(ex))
+        {
+            // Browser closed the connection before the response finished writing.
         }
         catch (Exception ex)
         {
@@ -106,5 +144,29 @@ public sealed class HttpsWebServer(int port, string contentPath, X509Certificate
         {
             client.Close();
         }
+    }
+
+    private static bool IsClientDisconnect(Exception ex)
+    {
+        if (ex is IOException ioEx)
+        {
+            var message = ioEx.Message;
+            if (message.Contains("Broken pipe", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("forcibly closed", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("transport connection", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        if (ex is SocketException socketEx
+            && (socketEx.SocketErrorCode == SocketError.ConnectionReset
+                || socketEx.SocketErrorCode == SocketError.ConnectionAborted
+                || socketEx.SocketErrorCode == SocketError.Shutdown))
+        {
+            return true;
+        }
+
+        return ex.InnerException is not null && IsClientDisconnect(ex.InnerException);
     }
 }
