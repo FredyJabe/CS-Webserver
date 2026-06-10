@@ -25,10 +25,7 @@ public static class ConfigLoader
         }
 
         var contentPath = Path.GetFullPath(contentPathRaw);
-        if (!Directory.Exists(contentPath))
-        {
-            throw new DirectoryNotFoundException($"Configured contentPath does not exist: {contentPath}");
-        }
+        Directory.CreateDirectory(contentPath);
 
         var https = LoadHttpsConfig(values);
         return new ServerConfig(port, contentPath, https);
