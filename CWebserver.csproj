@@ -9,4 +9,27 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Scripting" Version="4.14.0" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.72" />
   </ItemGroup>
+  <ItemGroup>
+    <Reference Include="NuGet.Common">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.Configuration">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.Configuration.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.Frameworks">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.Frameworks.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.Packaging">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.Packaging.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.ProjectModel">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.ProjectModel.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.Protocol">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.Protocol.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.Versioning">
+      <HintPath>$(MSBuildSDKsPath)/../NuGet.Versioning.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 </Project>

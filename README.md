@@ -129,6 +129,12 @@ Serves files directly from `contentPath` with content-type mapping for common ex
 
 `<cs>` blocks are executed on the server and replaced with their output.
 The original `<cs>` tags/code are never sent to clients.
+NuGet packages can be pulled in dynamically from `<cs>` blocks with either
+`#r "nuget: PackageId, Version"` or `#:package PackageId@Version`.
+The parser resolves packages at runtime through the NuGet V3 feed, downloads
+the package graph it needs, extracts it into a local staging cache, and adds
+the managed assemblies before compiling the script. Use `@*` or omit the
+version to ask for the latest available package version.
 
 #### In markdown/text
 
